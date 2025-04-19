@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Configuración</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        font-family: "Segoe UI", sans-serif;
+        padding: 20px;
+        margin: 0;
+        background-color: Canvas;
+        color: CanvasText;
+      }
+      h2 {
+        margin-bottom: 20px;
+      }
+      label {
+        display: block;
+        margin-bottom: 15px;
+        font-size: 15px;
+      }
+      button {
+        margin-top: 20px;
+        padding: 6px 12px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>⚙ Configuración</h2>
+    <label
+      ><input type="checkbox" id="confirmar" /> Preguntar antes de salir</label
+    >
+    <label
+      ><input type="checkbox" id="autoinicio" /> Iniciar al arrancar el
+      sistema</label
+    >
+    <button onclick="guardar()">Guardar</button>
+
+    <script>
+      const { ipcRenderer } = require("electron");
+      window.onload = () => {
+        ipcRenderer.invoke("obtenerConfig").then((config) => {
+          document.getElementById("confirmar").checked = config.confirmarSalida;
+          document.getElementById("autoinicio").checked =
+            config.iniciarConSistema;
+        });
+      };
+      function guardar() {
+        ipcRenderer.send("guardarConfig", {
+          confirmarSalida: document.getElementById("confirmar").checked,
+          iniciarConSistema: document.getElementById("autoinicio").checked,
+        });
+        window.close();
+      }
+    </script>
+  </body>
+</html>
