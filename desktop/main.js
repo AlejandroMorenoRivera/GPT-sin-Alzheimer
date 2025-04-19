@@ -5,17 +5,35 @@ const { spawn } = require("child_process");
 
 const USUARIOS_DIR = path.join(__dirname, "..", "data", "usuarios");
 const ESTADO_FILE = path.join(__dirname, "..", "data", "estado.json");
+const CONFIG_PATH = path.join(__dirname, "..", "config", "config.json");
 const ICONO_PATH = path.join(__dirname, "icon.ico");
 
 let tray = null;
 let backend = null;
 let tunnel = null;
-let estado = {
-  backendActivo: false,
-  tunnelActivo: false,
-  usuario: null,
-};
 let promptWindow = null;
+let estado = { backendActivo: false, tunnelActivo: false, usuario: null };
+let preferencias = { confirmarSalida: true, iniciarConSistema: false };
+
+function cargarPreferencias() {
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      preferencias = fs.readJSONSync(CONFIG_PATH);
+      console.log("Preferencias cargadas:", preferencias);
+    }
+  } catch (err) {
+    console.error("Error al cargar config.json:", err);
+  }
+}
+
+function guardarPreferencias() {
+  fs.writeJSONSync(CONFIG_PATH, preferencias);
+  console.log("Preferencias guardadas:", preferencias);
+  app.setLoginItemSettings({
+    openAtLogin: preferencias.iniciarConSistema,
+    path: app.getPath("exe"),
+  });
+}
 
 function cargarEstado() {
   try {
@@ -37,19 +55,14 @@ function escribirEstado(usuario) {
 
 function iniciarServidor() {
   const rutaBackend = path.join(__dirname, "..", "app", "index.js");
-  backend = spawn("node", [rutaBackend], {
-    shell: true,
-    stdio: "ignore",
-  });
-
+  backend = spawn("node", [rutaBackend], { shell: true });
   tunnel = spawn("lt", ["--port", "3611", "--subdomain", "gptsinalzheimer"], {
     shell: true,
-    stdio: "ignore",
   });
-
   estado.backendActivo = true;
   estado.tunnelActivo = true;
-  actualizarMenu();
+  console.log("Servidor iniciado");
+  if (!app.isQuiting) actualizarMenu();
 }
 
 function detenerServidor() {
@@ -57,7 +70,8 @@ function detenerServidor() {
   if (tunnel) tunnel.kill();
   estado.backendActivo = false;
   estado.tunnelActivo = false;
-  actualizarMenu();
+  console.log("Servidor detenido");
+  if (!app.isQuiting) actualizarMenu();
 }
 
 function actualizarMenu() {
@@ -74,37 +88,39 @@ function actualizarMenu() {
     click: () => {
       escribirEstado(nombre);
       dialog.showMessageBox({ message: `Usuario cambiado a: ${nombre}` });
-      actualizarMenu();
+      console.log("Usuario activo:", nombre);
+      if (!app.isQuiting) actualizarMenu();
     },
   }));
 
   usuarioMenu.push({ type: "separator" });
   usuarioMenu.push({
-    label: "➕ Crear nuevo usuario",
+    label: "Crear nuevo usuario",
     click: () => {
       promptWindow = new BrowserWindow({
         width: 400,
         height: 240,
         resizable: false,
-        frame: true, // ✅ Esto añade la barra con botón [X]
-        autoHideMenuBar: true, // Oculta barra de menú (si aparece)
+        frame: true,
         alwaysOnTop: true,
+        autoHideMenuBar: true,
         webPreferences: {
           nodeIntegration: true,
           contextIsolation: false,
         },
       });
-
-      promptWindow.loadFile(path.join(__dirname, "nuevo-usuario.html"));
+      promptWindow.loadFile(
+        path.join(__dirname, "windows", "nuevo-usuario.html")
+      );
     },
   });
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: `🧠 GPT sin Alzheimer`, enabled: false },
+    { label: "🧠 GPT sin Alzheimer", enabled: false },
     {
-      label: `Estado: ${estado.backendActivo ? "🟢 Backend" : "🔴 Backend"}, ${
-        estado.tunnelActivo ? "🟢 Tunnel" : "🔴 Tunnel"
-      }`,
+      label: `📡 Estado: ${
+        estado.backendActivo ? "🟢 Backend" : "🔴 Backend"
+      }, ${estado.tunnelActivo ? "🟢 Tunnel" : "🔴 Tunnel"}`,
       enabled: false,
     },
     { type: "separator" },
@@ -119,8 +135,9 @@ function actualizarMenu() {
     { label: "🛑 Apagar servidor", click: detenerServidor },
     { type: "separator" },
     { label: "🙋 Elegir usuario", submenu: usuarioMenu },
+    { type: "separator" },
     {
-      label: "⚙ Configuración",
+      label: "🛠 Configuracion",
       click: () => {
         const win = new BrowserWindow({
           width: 400,
@@ -134,33 +151,46 @@ function actualizarMenu() {
           },
         });
         win.loadFile(path.join(__dirname, "windows", "config.html"));
+        console.log("Ventana de configuracion abierta");
       },
     },
-    { type: "separator" },
     {
       label: "❌ Cerrar programa",
       click: () => {
         if (preferencias.confirmarSalida) {
-          const confirm = dialog.showMessageBoxSync({
-            type: "question",
-            buttons: ["Cancelar", "Salir"],
-            defaultId: 1,
-            cancelId: 0,
-            message: "¿Seguro que deseas salir?",
-            checkboxLabel: "No volver a preguntar",
-            checkboxChecked: false,
-          });
-
-          if (confirm.response === 1) {
-            if (confirm.checkboxChecked) {
-              preferencias.confirmarSalida = false;
-              fs.writeJSONSync(CONFIG_PATH, preferencias);
-            }
-            detenerServidor();
-            app.quit();
-          }
+          dialog
+            .showMessageBox({
+              type: "question",
+              buttons: ["Cancelar", "Salir"],
+              defaultId: 1,
+              cancelId: 0,
+              title: "Salir de la aplicacion",
+              message:
+                "Esta accion cerrara la aplicacion y detendra el servidor.",
+              checkboxLabel: "No volver a preguntar",
+              checkboxChecked: false,
+            })
+            .then((result) => {
+              console.log("Resultado del dialogo de salida:", result);
+              if (result.response === 1) {
+                if (result.checkboxChecked) {
+                  preferencias.confirmarSalida = false;
+                  guardarPreferencias();
+                  console.log("Confirmacion desactivada para futuros cierres");
+                }
+                if (!app.isQuiting) {
+                  app.isQuiting = true;
+                  detenerServidor();
+                  console.log("Cerrando aplicacion");
+                  app.quit();
+                }
+              } else {
+                console.log("Cierre cancelado");
+              }
+            });
         } else {
           detenerServidor();
+          console.log("Cerrando aplicacion sin confirmar");
           app.quit();
         }
       },
@@ -173,76 +203,35 @@ function actualizarMenu() {
   );
 }
 
+// INICIO
+app.isQuiting = false;
 app.whenReady().then(() => {
+  console.log("Iniciando GPT sin Alzheimer...");
   cargarEstado();
+  cargarPreferencias();
   tray = new Tray(ICONO_PATH);
   actualizarMenu();
 });
+
+// Evita que se cierre la app cuando no hay ventanas
 app.on("window-all-closed", (e) => {
-  // ⚠️ Evita que el cierre de ventanas termine la app
   e.preventDefault();
 });
 
-ipcMain.on("usuarioNuevo", (event, nombre) => {
-  if (!nombre || !nombre.trim()) return;
-
-  // Rechazar caracteres no válidos
-  const nombreLimpio = nombre.trim().replace(/[<>:"/\\|?*]/g, "");
-  const nombreProhibido = /^(con|prn|aux|nul|com\d|lpt\d)$/i;
-
-  if (nombreLimpio === "" || nombreProhibido.test(nombreLimpio)) {
-    dialog.showErrorBox(
-      "Nombre inválido",
-      "Ese nombre no es válido en Windows."
-    );
-    return;
-  }
-
-  const ruta = path.join(USUARIOS_DIR, nombreLimpio);
-  if (fs.existsSync(ruta)) {
-    dialog.showErrorBox(
-      "Usuario ya existe",
-      `El usuario "${nombreLimpio}" ya está registrado.`
-    );
-    return;
-  }
-
-  // ✅ Solo si es válido, cerrar la ventana y crear
-  if (promptWindow) {
-    promptWindow.close();
-    promptWindow = null;
-  }
-
-  fs.ensureDirSync(path.join(ruta, "notas"));
-  fs.ensureDirSync(path.join(ruta, "archivos"));
-  fs.writeJSONSync(path.join(ruta, "config.json"), { reglas: [] });
-  escribirEstado(nombreLimpio);
-  dialog.showMessageBox({ message: `Usuario ${nombreLimpio} creado.` });
-  actualizarMenu();
-});
-
-const CONFIG_PATH = path.join(__dirname, "..", "config", "config.json");
-let preferencias = { confirmarSalida: true, iniciarConSistema: false };
-
-function cargarPreferencias() {
-  try {
-    if (fs.existsSync(CONFIG_PATH)) {
-      preferencias = fs.readJSONSync(CONFIG_PATH);
-    }
-  } catch (err) {
-    console.error("No se pudo cargar config.json:", err);
-  }
-}
-
+// Persistencia de configuración desde ventana HTML
 ipcMain.handle("obtenerConfig", () => {
+  console.log("Enviando configuracion actual");
   return preferencias;
 });
 
 ipcMain.on("guardarConfig", (event, nueva) => {
   preferencias = nueva;
-  fs.writeJSONSync(CONFIG_PATH, preferencias);
-  app.setLoginItemSettings({
-    openAtLogin: preferencias.iniciarConSistema,
-    path: app.getPath("exe"),
-  });
+  guardarPreferencias();
+  console.log("Preferencias actualizadas desde ventana");
+});
+
+// Control de cierre real
+app.on("before-quit", () => {
+  console.log("Evento before-quit detectado");
+  app.isQuiting = true;
 });
