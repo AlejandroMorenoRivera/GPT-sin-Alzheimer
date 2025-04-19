@@ -1,0 +1,117 @@
+openapi: 3.0.0
+info:
+  title: GPT sin Alzheimer API
+  version: 1.0.0
+  description: |
+    API local para que GPT gestione notas, usuarios y preferencias de forma privada.
+    Cada usuario tiene su propia memoria, notas y reglas.
+
+servers:
+  - url: http://localhost:3611
+    description: Servidor local del usuario
+
+paths:
+  /usuarios:
+    get:
+      summary: Lista los usuarios disponibles
+      responses:
+        '200':
+          description: Lista de nombres de usuario
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /usuario:
+    post:
+      summary: Crea un nuevo usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+      responses:
+        '200':
+          description: Usuario creado
+
+  /usuario/activar:
+    post:
+      summary: Activa un usuario existente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+      responses:
+        '200':
+          description: Usuario activado
+
+  /notas:
+    get:
+      summary: Lista las notas del usuario actual
+      responses:
+        '200':
+          description: Lista de nombres de archivo
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /nota:
+    post:
+      summary: Crea o actualiza una nota
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                contenido:
+                  type: string
+      responses:
+        '200':
+          description: Nota guardada
+
+  /nota/{nombre}:
+    get:
+      summary: Devuelve el contenido de una nota
+      parameters:
+        - name: nombre
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Contenido de la nota
+          content:
+            text/plain:
+              schema:
+                type: string
+
+    delete:
+      summary: Borra una nota por nombre
+      parameters:
+        - name: nombre
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Nota eliminada
