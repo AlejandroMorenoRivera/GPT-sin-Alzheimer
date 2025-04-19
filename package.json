@@ -1,6 +1,6 @@
 {
   "name": "gpt-sin-alzheimer",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Companion de memoria extendida para GPT",
   "main": "desktop/main.js",
   "author": "Alejandro Moreno Rivera",
