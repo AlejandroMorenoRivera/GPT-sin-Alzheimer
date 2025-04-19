@@ -16,10 +16,16 @@ app.use(express.json()); // Permite recibir JSON en los POST
 
 // 🔧 Función auxiliar: obtener el usuario actualmente activo
 function getUsuarioActual() {
-  if (!fs.existsSync(ESTADO_FILE)) return null;
-  const estado = fs.readJSONSync(ESTADO_FILE);
-  return estado.usuario || null;
+  try {
+    if (!fs.existsSync(ESTADO_FILE)) return null;
+    const estado = fs.readJSONSync(ESTADO_FILE);
+    return estado.usuario || null;
+  } catch (err) {
+    console.error("Error leyendo estado.json:", err.message);
+    return null;
+  }
 }
+
 
 // 🔧 Función auxiliar: cambiar el usuario activo
 function setUsuarioActual(nombre) {
@@ -123,6 +129,7 @@ app.delete('/nota/:nombre', (req, res) => {
 
 
 // 🟢 Iniciar el servidor
+app.use('/openapi.yaml', express.static(path.join(__dirname, '..', 'gpt', 'openapi.yaml')));
 app.listen(PORT, () => {
   console.log(`GPT sin Alzheimer escuchando en http://localhost:${PORT}`);
 });

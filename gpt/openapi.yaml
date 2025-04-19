@@ -1,19 +1,19 @@
-openapi: 3.0.0
+
+openapi: 3.1.0
 info:
   title: GPT sin Alzheimer API
   version: 1.0.0
-  description: |
-    API local para que GPT gestione notas, usuarios y preferencias de forma privada.
-    Cada usuario tiene su propia memoria, notas y reglas.
+  description: API local para que GPT gestione notas, usuarios y preferencias de forma privada.
 
 servers:
-  - url: http://localhost:3611
+  - url: https://gptsinalzheimer.loca.lt
     description: Servidor local del usuario
 
 paths:
   /usuarios:
     get:
       summary: Lista los usuarios disponibles
+      operationId: listarUsuarios
       responses:
         '200':
           description: Lista de nombres de usuario
@@ -27,6 +27,7 @@ paths:
   /usuario:
     post:
       summary: Crea un nuevo usuario
+      operationId: crearUsuario
       requestBody:
         required: true
         content:
@@ -43,6 +44,7 @@ paths:
   /usuario/activar:
     post:
       summary: Activa un usuario existente
+      operationId: activarUsuario
       requestBody:
         required: true
         content:
@@ -59,6 +61,7 @@ paths:
   /notas:
     get:
       summary: Lista las notas del usuario actual
+      operationId: listarNotas
       responses:
         '200':
           description: Lista de nombres de archivo
@@ -72,6 +75,7 @@ paths:
   /nota:
     post:
       summary: Crea o actualiza una nota
+      operationId: guardarNota
       requestBody:
         required: true
         content:
@@ -90,6 +94,7 @@ paths:
   /nota/{nombre}:
     get:
       summary: Devuelve el contenido de una nota
+      operationId: obtenerNota
       parameters:
         - name: nombre
           in: path
@@ -106,6 +111,7 @@ paths:
 
     delete:
       summary: Borra una nota por nombre
+      operationId: borrarNota
       parameters:
         - name: nombre
           in: path
