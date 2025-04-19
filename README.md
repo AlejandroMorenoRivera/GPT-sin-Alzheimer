@@ -21,3 +21,4 @@
 - Soporte móvil (PWA o nativa) 🔜
 - Exportación y backups automáticos 🔜
 
+[📝 Ver historial de versiones → CHANGELOG.md](./CHANGELOG.md)
