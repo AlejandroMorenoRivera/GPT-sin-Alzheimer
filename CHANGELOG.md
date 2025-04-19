@@ -6,13 +6,29 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
-## [v0.3.1] - 2025-04-19
+## [v0.4.1] - 2025-04-19
+
 ### Añadido
+
+- Archivo `PRIVACY.md` con política de privacidad detallada.
+- Enlace a la política en el `README.md`.
+
+### Aviso
+
+- El proyecto sigue en estado alfa. No se recomienda almacenar información sensible.
+
+---
+
+## [v0.3.1] - 2025-04-19
+
+### Añadido
+
 - Interfaz gráfica pulida para crear usuarios desde bandeja
 - Detección automática de modo oscuro/claro en HTML
 - Botones "Crear" y "Cancelar" con diseño centrado
 
 ### Corregido
+
 - Validación de nombres de usuario según reglas de Windows
 - Error que cerraba la app al mostrar errores
 - Margen visual que causaba descuadre en el prompt
@@ -20,7 +36,9 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 ---
 
 ## [v0.3.0] - 2025-04-18
+
 ### Añadido
+
 - Sistema de bandeja con control de servidor (encender/apagar/reiniciar)
 - Cambio de usuario y creación desde menú contextual
 - Auto-lanzamiento del backend y tunnel desde Electron
@@ -28,7 +46,9 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 ---
 
 ## [v0.2.0] - 2025-04-17
+
 ### Añadido
+
 - Backend funcional multiusuario
 - Endpoints REST para notas y configuración
 - Integración con GPT personalizado y validación de funciones
@@ -36,7 +56,9 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 ---
 
 ## [v0.1.0] - 2025-04-16
+
 ### Inicial
+
 - Estructura base del proyecto
 - Sistema de notas locales por usuario
 - Icono e identidad visual definidos
