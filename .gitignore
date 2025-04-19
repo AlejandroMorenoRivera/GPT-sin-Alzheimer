@@ -1,3 +1,7 @@
+
+#Carpeta de builds para ejecutables
+/builds
+
 # Logs
 logs
 *.log

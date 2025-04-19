@@ -1,5 +1,49 @@
 {
+  "name": "gpt-sin-alzheimer",
+  "version": "0.5.1",
+  "description": "Companion de memoria extendida para GPT",
+  "main": "desktop/main.js",
+  "author": "Alejandro Moreno Rivera",
+  "license": "MIT",
+  "scripts": {
+    "start": "npx electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "demo": "node build-demo.js"
+  },
+  "dependencies": {
+    "fs-extra": "^11.3.0"
+  },
   "devDependencies": {
-    "electron": "^35.2.0"
+    "electron": "^35.2.0",
+    "electron-builder": "^26.0.12",
+    "rimraf": "^6.0.1"
+  },
+  "build": {
+    "appId": "com.gptsinalzheimer.desktop",
+    "productName": "GPT sin Alzheimer",
+    "files": [
+      "app/**/*",
+      "desktop/**/*",
+      "config/**/*",
+      "data/**/*",
+      "windows/**/*",
+      "icon/**/*",
+      "PRIVACY.md",
+      "README.md"
+    ],
+    "extraResources": [
+      {
+        "from": "data/",
+        "to": "data/",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon/gpt-sin-alzheimer.ico"
+    }
   }
 }
