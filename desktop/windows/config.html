@@ -13,47 +13,122 @@
         margin: 0;
         background-color: Canvas;
         color: CanvasText;
+        width: 400px;
       }
+
       h2 {
-        margin-bottom: 20px;
+        margin-bottom: 10px;
+        border-bottom: 1px solid gray;
+        padding-bottom: 4px;
       }
+
+      section {
+        margin-bottom: 25px;
+      }
+
       label {
-        display: block;
-        margin-bottom: 15px;
-        font-size: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 8px 0;
       }
-      button {
+
+      .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .button-group {
+        display: flex;
+        justify-content: space-between;
         margin-top: 20px;
-        padding: 6px 12px;
+      }
+
+      button {
+        padding: 6px 14px;
         font-size: 14px;
       }
     </style>
   </head>
   <body>
-    <h2>⚙ Configuración</h2>
-    <label
-      ><input type="checkbox" id="confirmar" /> Preguntar antes de salir</label
-    >
-    <label
-      ><input type="checkbox" id="autoinicio" /> Iniciar al arrancar el
-      sistema</label
-    >
-    <button onclick="guardar()">Guardar</button>
+    <h1>⚙ Configuración</h1>
+
+    <!-- ⚙ General -->
+    <section>
+      <h2>General</h2>
+      <label>
+        <span>❓ Preguntar antes de salir</span>
+        <input type="checkbox" id="confirmar" />
+      </label>
+      <label>
+        <span>🖥️ Iniciar con el sistema</span>
+        <input type="checkbox" id="autoinicio" />
+      </label>
+    </section>
+
+    <!-- 👨‍💻 Modo desarrollador -->
+    <section>
+      <h2>Modo desarrollador</h2>
+      <label>
+        <div class="checkbox-group">
+          <span>🪵 Consola del sistema</span>
+          <input type="checkbox" id="modoDev" />
+          <button onclick="abrirLogs()">Abrir</button>
+        </div>
+      </label>
+
+      <label>
+        <div class="checkbox-group">
+          <span>💬 Consola de eventos GPT</span>
+          <input type="checkbox" id="consolaGpt" />
+          <button onclick="abrirLogsGpt()">Abrir</button>
+        </div>
+      </label>
+    </section>
+
+    <!-- Botones inferiores -->
+    <div class="button-group">
+      <button onclick="guardar()">Guardar</button>
+      <button onclick="window.close()">Cancelar</button>
+    </div>
 
     <script>
       const { ipcRenderer } = require("electron");
-      window.onload = () => {
-        ipcRenderer.invoke("obtenerConfig").then((config) => {
-          document.getElementById("confirmar").checked = config.confirmarSalida;
-          document.getElementById("autoinicio").checked =
-            config.iniciarConSistema;
-        });
+
+      // Al cargar ventana, obtener configuración actual
+      window.onload = async () => {
+        const prefs = await ipcRenderer.invoke("obtenerConfig");
+
+        document.getElementById("confirmar").checked = prefs.confirmarSalida;
+        document.getElementById("autoinicio").checked = prefs.iniciarConSistema;
+        document.getElementById("modoDev").checked = prefs.modoDesarrollador;
+        document.getElementById("consolaGpt").checked = prefs.consolaGPT;
       };
+
+      // Acciones
+      function abrirLogs() {
+        ipcRenderer.send("abrirLogs");
+      }
+
+      function abrirLogsGpt() {
+        ipcRenderer.send("abrirLogsGpt");
+      }
+
       function guardar() {
-        ipcRenderer.send("guardarConfig", {
+        const nuevaConfig = {
           confirmarSalida: document.getElementById("confirmar").checked,
           iniciarConSistema: document.getElementById("autoinicio").checked,
-        });
+          modoDesarrollador: document.getElementById("modoDev").checked,
+          consolaGPT: document.getElementById("consolaGpt").checked,
+        };
+
+        ipcRenderer.send("guardarConfig", nuevaConfig);
+
+        // Si están activadas, abrirlas al instante
+        if (nuevaConfig.modoDesarrollador) abrirLogs();
+        if (nuevaConfig.consolaGPT) abrirLogsGpt();
+
         window.close();
       }
     </script>
