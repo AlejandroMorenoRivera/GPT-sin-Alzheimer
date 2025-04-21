@@ -13,36 +13,34 @@ const outputDir = path.join(
 const unpackedDir = path.join(outputDir, "win-unpacked");
 const outputExe = path.join(unpackedDir, "GPT sin Alzheimer.exe");
 
-// Función para saber si el .exe está bloqueado o en uso por otro proceso
+// ✅ Verifica si el EXE está en uso
 function isExeLocked(filePath) {
   try {
     const fd = fs.openSync(filePath, "r+");
     fs.closeSync(fd);
-    return false; // ✅ Se pudo abrir → NO está en uso
-  } catch (err) {
-    return true; // ❌ Está en uso o bloqueado
+    return false;
+  } catch {
+    return true;
   }
 }
 
-// Si ya existe el ejecutable y está bloqueado → cancelar build
+// 🧹 Cancela si está en uso
 if (fs.existsSync(outputExe) && isExeLocked(outputExe)) {
-  console.log("❌ El EXE está en uso o bloqueado por el sistema.");
-  console.log("🔒 Posibles causas:");
-  console.log("   - El Explorador de archivos tiene abierta la carpeta.");
-  console.log("   - Un antivirus está escaneando el archivo.");
-  console.log("   - Un proceso zombie de Electron sigue activo.");
-  console.log("👉 Cierra todo lo relacionado y vuelve a intentar.");
+  console.log("❌ El EXE está en uso. Cierra la app o el explorador.");
   process.exit(1);
 }
 
-// Si la carpeta de destino ya existe y el .exe no está bloqueado → limpiarla
+// 🧼 Limpia carpeta anterior
 if (fs.existsSync(outputDir)) {
   console.log("🧹 Limpiando carpeta del build anterior...");
   rimraf.sync(outputDir);
 }
 
-// Recrear carpeta limpia
+// 📁 Crea carpeta nueva
 fs.mkdirSync(outputDir, { recursive: true });
+
+// 🔍 Debug: muestra lo que ve desde la raíz
+console.log("📁 Contenido de la raíz:", fs.readdirSync(__dirname));
 
 console.log(`🚧 Iniciando empaquetado de GPT sin Alzheimer v${version}...`);
 
@@ -50,8 +48,27 @@ builder
   .build({
     config: {
       directories: {
-        app: ".", // 👈 ¡Empaqueta desde la raíz!
+        app: ".", // 👈 raíz como base del proyecto
         output: outputDir,
+      },
+      asar: false,
+      extraMetadata: {
+        main: "desktop/main.js", // 👈 entrada principal
+      },
+      files: [
+        "app/**/*",
+        "desktop/**/*",
+        "config/**/*",
+        "data/**/*",
+        "icon/**/*",
+        "windows/**/*",
+        "package.json",
+        "README.md",
+        "PRIVACY.md",
+      ],
+      win: {
+        icon: "icon/gpt-sin-alzheimer.ico",
+        target: "nsis",
       },
     },
   })
