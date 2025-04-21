@@ -3,7 +3,6 @@ const path = require("path");
 const fs = require("fs-extra");
 const { spawn } = require("child_process");
 
-// 📁 Rutas absolutas desde el directorio actual (desktop)
 const USUARIOS_DIR = path.join(__dirname, "..", "data", "usuarios");
 const ESTADO_FILE = path.join(__dirname, "..", "data", "estado.json");
 const CONFIG_PATH = path.join(__dirname, "..", "config", "config.json");
@@ -17,6 +16,8 @@ let promptWindow = null;
 let logsSistema = null;
 let logsGPT = null;
 
+let colaLogsGPT = [];
+
 let estado = { backendActivo: false, tunnelActivo: false, usuario: null };
 let preferencias = {
   confirmarSalida: true,
@@ -25,7 +26,7 @@ let preferencias = {
   consolaGPT: false,
 };
 
-// 📤 Logs universales
+// 📤 Logs
 function logSistema(msg) {
   console.log("[SISTEMA]", msg);
   if (logsSistema && !logsSistema.isDestroyed()) {
@@ -37,13 +38,21 @@ function logGPT(msg) {
   console.log("[GPT]", msg);
   if (logsGPT && !logsGPT.isDestroyed()) {
     logsGPT.webContents.send("log", msg.toString());
+  } else {
+    colaLogsGPT.push(msg);
+  }
+}
+
+function vaciarColaLogsGPT() {
+  if (!logsGPT || logsGPT.isDestroyed()) return;
+  while (colaLogsGPT.length > 0) {
+    logsGPT.webContents.send("log", colaLogsGPT.shift());
   }
 }
 
 // 🪟 Consolas
 function abrirVentanaLogsSistema() {
   if (logsSistema && !logsSistema.isDestroyed()) return logsSistema.focus();
-
   logsSistema = new BrowserWindow({
     width: 600,
     height: 400,
@@ -52,14 +61,15 @@ function abrirVentanaLogsSistema() {
     autoHideMenuBar: true,
     webPreferences: { nodeIntegration: true, contextIsolation: false },
   });
-
-  logsSistema.loadFile(path.join(__dirname, "windows", "logs-sistema.html"));
-  logSistema("Consola del sistema abierta");
+  logsSistema
+    .loadFile(path.join(__dirname, "windows", "logs-sistema.html"))
+    .then(() => {
+      logSistema("Consola del sistema abierta");
+    });
 }
 
 function abrirVentanaLogsGPT() {
   if (logsGPT && !logsGPT.isDestroyed()) return logsGPT.focus();
-
   logsGPT = new BrowserWindow({
     width: 600,
     height: 400,
@@ -68,31 +78,29 @@ function abrirVentanaLogsGPT() {
     autoHideMenuBar: true,
     webPreferences: { nodeIntegration: true, contextIsolation: false },
   });
-
-  logsGPT.loadFile(path.join(__dirname, "windows", "logs-gpt.html"));
-  logGPT("Consola GPT abierta");
+  logsGPT
+    .loadFile(path.join(__dirname, "windows", "logs-gpt.html"))
+    .then(() => {
+      logGPT("✅ Consola GPT abierta y lista.");
+      vaciarColaLogsGPT();
+    });
 }
 
 // ⚙️ Configuración
 function cargarPreferencias() {
   try {
     if (fs.existsSync(CONFIG_PATH)) {
-      const datos = fs.readJSONSync(CONFIG_PATH);
-      preferencias = { ...preferencias, ...datos };
-      logSistema("Preferencias cargadas: " + JSON.stringify(preferencias));
+      preferencias = { ...preferencias, ...fs.readJSONSync(CONFIG_PATH) };
+      logSistema("Preferencias cargadas.");
     }
   } catch (err) {
-    logSistema("Error cargando config.json: " + err);
+    logSistema("Error cargando preferencias: " + err.message);
   }
 }
 
 function guardarPreferencias() {
   fs.writeJSONSync(CONFIG_PATH, preferencias);
-  logSistema("Preferencias guardadas: " + JSON.stringify(preferencias));
-  app.setLoginItemSettings({
-    openAtLogin: preferencias.iniciarConSistema,
-    path: app.getPath("exe"),
-  });
+  app.setLoginItemSettings({ openAtLogin: preferencias.iniciarConSistema });
 }
 
 // Estado
@@ -110,19 +118,13 @@ function escribirEstado(usuario) {
   estado.usuario = usuario;
 }
 
-// 🚀 Servidor & túnel
+// 🚀 Backend y túnel
 function iniciarServidor() {
-  if (estado.backendActivo || estado.tunnelActivo) {
-    logSistema("⚠️ El servidor ya está activo. Ignorando intento de reinicio.");
-    return;
-  }
+  if (estado.backendActivo || estado.tunnelActivo) return;
 
-  logSistema("Iniciando servidor...");
-
-  if (!fs.existsSync(INDEX_BACKEND)) {
-    logSistema("❌ El archivo del backend no se encontró en: " + INDEX_BACKEND);
-    return;
-  }
+  logSistema("Iniciando backend...");
+  if (!fs.existsSync(INDEX_BACKEND))
+    return logSistema("❌ index.js no encontrado");
 
   backend = spawn("node", [INDEX_BACKEND], {
     shell: true,
@@ -130,62 +132,59 @@ function iniciarServidor() {
   });
 
   backend.on("message", (msg) => {
-    if (msg.tipo === "log-gpt") logGPT(msg.mensaje);
+    if (msg?.tipo === "listo") {
+      backend.send({ tipo: "canal-listo" });
+    }
+    if (msg?.tipo === "log-gpt") {
+      logGPT("📡 " + msg.mensaje);
+    }
+  });
+
+  backend.stdout.on("data", (data) => {
+    const texto = data.toString().trim();
+    if (texto.includes("[STDOUT]")) {
+      logGPT(texto);
+    } else {
+      logSistema(`🗒️ Salida backend: ${texto}`);
+    }
+  });
+
+  backend.stderr.on("data", (data) => {
+    logSistema("💥 Error backend:\n" + data.toString());
   });
 
   backend.on("exit", (code, signal) => {
     logSistema(
       `❌ Backend cerrado con código ${code} ${
-        signal ? `(signal: ${signal})` : ""
+        signal ? `(sig: ${signal})` : ""
       }`
     );
     estado.backendActivo = false;
     actualizarMenu();
   });
 
-  backend.stderr.on("data", (data) => {
-    logSistema("💥 Error del backend:\n" + data.toString());
-  });
-
-  logSistema("Conectando túnel localtunnel...");
   tunnel = spawn("lt", ["--port", "3611", "--subdomain", "gptsinalzheimer"], {
     shell: true,
   });
 
   tunnel.stdout.on("data", (data) => {
     const msg = data.toString();
-    logSistema("Tunnel info: " + msg);
-
     if (msg.includes("your url is:")) {
       const url = msg.split("your url is:")[1].trim();
-
-      if (!url.includes("gptsinalzheimer")) {
-        logSistema("⚠️ Subdominio incorrecto, reiniciando túnel...");
+      if (url.includes("gptsinalzheimer")) {
+        logSistema("✅ Túnel activo en: " + url);
+      } else {
         tunnel.kill();
-        tunnel = null;
-        setTimeout(() => iniciarServidor(), 3000);
-        return;
+        setTimeout(iniciarServidor, 3000);
       }
-
-      logSistema("✅ Túnel activo en: " + url);
     }
   });
 
-  tunnel.stderr.on("data", (data) =>
-    logSistema("Error túnel: " + data.toString())
-  );
-
   tunnel.on("exit", () => {
-    logSistema("❌ Túnel cerrado inesperadamente");
+    logSistema("❌ Túnel cerrado");
     estado.tunnelActivo = false;
     actualizarMenu();
-
-    if (!app.isQuiting) {
-      logSistema("♻️ Reintentando conexión del túnel en 3s...");
-      setTimeout(() => {
-        if (!tunnel) iniciarServidor();
-      }, 3000);
-    }
+    if (!app.isQuiting) setTimeout(iniciarServidor, 3000);
   });
 
   estado.backendActivo = true;
@@ -194,22 +193,16 @@ function iniciarServidor() {
 }
 
 function detenerServidor() {
-  if (backend) {
-    backend.kill();
-    backend = null;
-  }
-  if (tunnel) {
-    tunnel.kill();
-    tunnel = null;
-  }
-
+  if (backend) backend.kill();
+  if (tunnel) tunnel.kill();
+  backend = null;
+  tunnel = null;
   estado.backendActivo = false;
   estado.tunnelActivo = false;
-  logSistema("Servidor detenido");
   actualizarMenu();
 }
 
-// 📋 Menú tray
+// 📋 Tray Menu
 function actualizarMenu() {
   const usuarios = fs.existsSync(USUARIOS_DIR)
     ? fs
@@ -223,109 +216,106 @@ function actualizarMenu() {
     checked: nombre === estado.usuario,
     click: () => {
       escribirEstado(nombre);
-      dialog.showMessageBox({ message: `Usuario cambiado a: ${nombre}` });
-      logSistema("Usuario activo: " + nombre);
+      logSistema(`Usuario cambiado a ${nombre}`);
       actualizarMenu();
     },
   }));
 
-  usuarioMenu.push({ type: "separator" });
-  usuarioMenu.push({
-    label: "Crear nuevo usuario",
-    click: () => {
-      promptWindow = new BrowserWindow({
-        width: 400,
-        height: 240,
-        resizable: false,
-        frame: true,
-        alwaysOnTop: true,
-        autoHideMenuBar: true,
-        webPreferences: { nodeIntegration: true, contextIsolation: false },
-      });
-      promptWindow.loadFile(
-        path.join(__dirname, "windows", "nuevo-usuario.html")
-      );
-    },
-  });
-
-  const contextMenu = Menu.buildFromTemplate([
-    { label: "🧠 GPT sin Alzheimer", enabled: false },
-    {
-      label: `📡 Estado: ${
-        estado.backendActivo ? "🟢 Backend" : "🔴 Backend"
-      }, ${estado.tunnelActivo ? "🟢 Tunnel" : "🔴 Tunnel"}`,
-      enabled: false,
-    },
+  usuarioMenu.push(
     { type: "separator" },
-    { label: "⚙ Encender servidor", click: iniciarServidor },
     {
-      label: "🔁 Reiniciar servidor",
+      label: "Crear nuevo usuario",
       click: () => {
-        detenerServidor();
-        setTimeout(iniciarServidor, 500);
-      },
-    },
-    { label: "🛑 Apagar servidor", click: detenerServidor },
-    { type: "separator" },
-    { label: "🙋 Elegir usuario", submenu: usuarioMenu },
-    { type: "separator" },
-    {
-      label: "🛠 Configuración",
-      click: () => {
-        const win = new BrowserWindow({
-          width: 500,
-          height: 370,
+        promptWindow = new BrowserWindow({
+          width: 400,
+          height: 240,
           resizable: false,
           alwaysOnTop: true,
           autoHideMenuBar: true,
           webPreferences: { nodeIntegration: true, contextIsolation: false },
         });
-        win.loadFile(path.join(__dirname, "windows", "config.html"));
-        logSistema("Ventana de configuración abierta");
+        promptWindow.loadFile(
+          path.join(__dirname, "windows", "nuevo-usuario.html")
+        );
       },
-    },
-    {
-      label: "❌ Cerrar programa",
-      click: () => {
-        if (preferencias.confirmarSalida) {
-          dialog
-            .showMessageBox({
-              type: "question",
-              buttons: ["Cancelar", "Salir"],
-              defaultId: 1,
-              cancelId: 0,
-              title: "¿Seguro que deseas salir?",
-              message:
-                "Esta acción cerrará la aplicación y detendrá el servidor.",
-              checkboxLabel: "No volver a preguntar",
-              checkboxChecked: false,
-            })
-            .then((result) => {
-              if (result.response === 1) {
-                if (result.checkboxChecked) {
-                  preferencias.confirmarSalida = false;
-                  guardarPreferencias();
-                }
-                app.isQuiting = true;
-                detenerServidor();
-                setTimeout(() => app.quit(), 300);
-              }
-            });
-        } else {
-          detenerServidor();
-          app.quit();
-        }
-      },
-    },
-  ]);
+    }
+  );
 
-  tray.setContextMenu(contextMenu);
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "🧠 GPT sin Alzheimer", enabled: false },
+      {
+        label: `📡 Estado: ${
+          estado.backendActivo ? "🟢 Backend" : "🔴 Backend"
+        }, ${estado.tunnelActivo ? "🟢 Tunnel" : "🔴 Tunnel"}`,
+        enabled: false,
+      },
+      { type: "separator" },
+      { label: "⚙ Encender servidor", click: iniciarServidor },
+      {
+        label: "🔁 Reiniciar servidor",
+        click: () => {
+          detenerServidor();
+          setTimeout(iniciarServidor, 500);
+        },
+      },
+      { label: "🛑 Apagar servidor", click: detenerServidor },
+      { type: "separator" },
+      { label: "🙋 Elegir usuario", submenu: usuarioMenu },
+      { type: "separator" },
+      {
+        label: "🛠 Configuración",
+        click: () => {
+          const win = new BrowserWindow({
+            width: 500,
+            height: 370,
+            resizable: false,
+            alwaysOnTop: true,
+            autoHideMenuBar: true,
+            webPreferences: { nodeIntegration: true, contextIsolation: false },
+          });
+          win.loadFile(path.join(__dirname, "windows", "config.html"));
+        },
+      },
+      {
+        label: "❌ Cerrar programa",
+        click: () => {
+          if (preferencias.confirmarSalida) {
+            dialog
+              .showMessageBox({
+                type: "question",
+                buttons: ["Cancelar", "Salir"],
+                title: "¿Salir?",
+                message: "Esta acción cerrará la app y el servidor.",
+                checkboxLabel: "No volver a preguntar",
+                checkboxChecked: false,
+              })
+              .then((res) => {
+                if (res.response === 1) {
+                  if (res.checkboxChecked) {
+                    preferencias.confirmarSalida = false;
+                    guardarPreferencias();
+                  }
+                  app.isQuiting = true;
+                  detenerServidor();
+                  setTimeout(() => app.quit(), 300);
+                }
+              });
+          } else {
+            detenerServidor();
+            app.quit();
+          }
+        },
+      },
+    ])
+  );
+
   tray.setToolTip(
     `GPT sin Alzheimer - ${estado.usuario || "Sin usuario activo"}`
   );
 }
 
-// 🚀 Evento ready
+// 🚀 App Ready
 app.whenReady().then(() => {
   logSistema("Iniciando aplicación...");
   cargarEstado();
@@ -337,15 +327,13 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", (e) => e.preventDefault());
-
 ipcMain.handle("obtenerConfig", () => preferencias);
-ipcMain.on("guardarConfig", (event, nueva) => {
+ipcMain.on("guardarConfig", (_, nueva) => {
   preferencias = { ...preferencias, ...nueva };
   guardarPreferencias();
   if (preferencias.modoDesarrollador) abrirVentanaLogsSistema();
   if (preferencias.consolaGPT) abrirVentanaLogsGPT();
 });
-
 ipcMain.on("abrirLogs", abrirVentanaLogsSistema);
 ipcMain.on("abrirLogsGPT", abrirVentanaLogsGPT);
 

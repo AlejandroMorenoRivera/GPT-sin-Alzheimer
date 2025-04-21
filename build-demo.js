@@ -7,7 +7,7 @@ const pkg = require("./package.json");
 const version = pkg.version;
 const outputDir = path.join(
   __dirname,
-  "builds",
+  "../builds",
   `GPT-sin-Alzheimer-v${version}`
 );
 const unpackedDir = path.join(outputDir, "win-unpacked");

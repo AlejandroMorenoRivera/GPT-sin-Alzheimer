@@ -1,141 +1,183 @@
-// Importamos librerías necesarias
-const express = require("express"); // Framework para construir APIs HTTP
-const cors = require("cors"); // Para permitir peticiones desde cualquier origen (útil si el GPT usa navegador)
-const fs = require("fs-extra"); // Para leer y escribir archivos fácilmente
-const path = require("path"); // Para construir rutas de carpetas y archivos
+const express = require("express");
+const cors = require("cors");
+const fs = require("fs-extra");
+const path = require("path");
 
-// Configuración básica
-const PORT = 3611; // Puerto en el que escuchará la app local
-const DATA_DIR = path.join(__dirname, "..", "data"); // Carpeta donde guardamos todo lo importante
-const USUARIOS_DIR = path.join(DATA_DIR, "usuarios"); // Subcarpeta con los datos de cada usuario
-const ESTADO_FILE = path.join(DATA_DIR, "estado.json"); // Archivo que recuerda el usuario activo
+const PORT = 3611;
+const DATA_DIR = path.join(__dirname, "..", "data");
+const USUARIOS_DIR = path.join(DATA_DIR, "usuarios");
+const ESTADO_FILE = path.join(DATA_DIR, "estado.json");
 
 const app = express();
 app.use(cors());
-app.use(express.json()); // Permite recibir JSON en los POST
+app.use(express.json());
 
-// 🔧 Función auxiliar: obtener el usuario actualmente activo
+const log = (msg) => console.log(`[STDOUT] ${msg}`);
+const logReq = (ruta) => log(`→ Requerido: ${ruta}`);
+const logOK = (ruta, datos) => log(`✔️ OK: ${ruta} → ${JSON.stringify(datos)}`);
+const logError = (ruta, status, err) =>
+  log(`❌ ERROR ${status}: ${ruta} → ${err}`);
+
+// 🔧 Estado del usuario
 function getUsuarioActual() {
   try {
     if (!fs.existsSync(ESTADO_FILE)) return null;
     const estado = fs.readJSONSync(ESTADO_FILE);
     return estado.usuario || null;
   } catch (err) {
-    console.error("Error leyendo estado.json:", err.message);
+    logError("estado.json", 500, err.message);
     return null;
   }
 }
 
-// 🔧 Función auxiliar: cambiar el usuario activo
 function setUsuarioActual(nombre) {
   fs.writeJSONSync(ESTADO_FILE, { usuario: nombre });
+  log(`🔄 Usuario activo cambiado a "${nombre}"`);
 }
 
-// 🔒 Middleware global: bloquea el acceso a rutas si no hay usuario activo
-// (Excepto la creación/selección de usuario)
+// 🔐 Middleware: verifica usuario activo
 app.use((req, res, next) => {
+  if (["/usuario", "/usuarios"].includes(req.path)) return next();
   const usuario = getUsuarioActual();
-  if (!usuario && req.path !== "/usuario" && req.path !== "/usuarios") {
+  if (!usuario) {
+    logError(req.path, 400, "No hay usuario seleccionado");
     return res.status(400).json({ error: "No hay usuario seleccionado" });
   }
   req.usuario = usuario;
   next();
 });
 
-// ✅ POST /usuario - Crear un nuevo usuario y activarlo
+// 🧠 Usuario: Crear
 app.post("/usuario", (req, res) => {
+  logReq("/usuario");
   const { nombre } = req.body;
-  if (!nombre) return res.status(400).json({ error: "Nombre requerido" });
+  if (!nombre) {
+    logError("/usuario", 400, "Nombre requerido");
+    return res.status(400).json({ error: "Nombre requerido" });
+  }
 
   const userPath = path.join(USUARIOS_DIR, nombre);
   if (fs.existsSync(userPath)) {
+    logError("/usuario", 400, "Ese usuario ya existe");
     return res.status(400).json({ error: "Ese usuario ya existe" });
   }
 
-  // Creamos carpetas del nuevo usuario
   fs.ensureDirSync(path.join(userPath, "notas"));
   fs.ensureDirSync(path.join(userPath, "archivos"));
-
-  // Configuración inicial vacía
   fs.writeJSONSync(path.join(userPath, "config.json"), { reglas: [] });
 
   setUsuarioActual(nombre);
-  res.json({ mensaje: `Usuario ${nombre} creado y activado.` });
+  const respuesta = { mensaje: `Usuario ${nombre} creado y activado.` };
+  logOK("/usuario", respuesta);
+  res.json(respuesta);
 });
 
-// ✅ POST /usuario/activar - Cambiar el usuario activo
+// 🧠 Usuario: Activar
 app.post("/usuario/activar", (req, res) => {
+  logReq("/usuario/activar");
   const { nombre } = req.body;
   const userPath = path.join(USUARIOS_DIR, nombre);
   if (!fs.existsSync(userPath)) {
+    logError("/usuario/activar", 404, "Usuario no encontrado");
     return res.status(404).json({ error: "Usuario no encontrado" });
   }
 
   setUsuarioActual(nombre);
-  res.json({ mensaje: `Usuario ${nombre} activado.` });
+  const respuesta = { mensaje: `Usuario ${nombre} activado.` };
+  logOK("/usuario/activar", respuesta);
+  res.json(respuesta);
 });
 
-// ✅ GET /usuarios - Lista de todos los usuarios disponibles
+// 🧠 Usuario: Listado
 app.get("/usuarios", (req, res) => {
+  logReq("/usuarios");
   const carpetas = fs
     .readdirSync(USUARIOS_DIR)
     .filter((n) => fs.statSync(path.join(USUARIOS_DIR, n)).isDirectory());
+
+  logOK("/usuarios", carpetas);
   res.json(carpetas);
 });
 
-// ✅ GET /notas - Devuelve nombres de todas las notas del usuario actual
+// 🗒️ Notas: Listado
 app.get("/notas", (req, res) => {
+  logReq("/notas");
   const notasDir = path.join(USUARIOS_DIR, req.usuario, "notas");
   const archivos = fs.readdirSync(notasDir);
+  logOK("/notas", archivos);
   res.json(archivos);
 });
 
-// ✅ GET /nota/:nombre - Leer el contenido de una nota específica
+// 🗒️ Notas: Obtener
 app.get("/nota/:nombre", (req, res) => {
+  const ruta = `/nota/${req.params.nombre}`;
+  logReq(ruta);
   const notaPath = path.join(
     USUARIOS_DIR,
     req.usuario,
     "notas",
     req.params.nombre
   );
-  if (!fs.existsSync(notaPath))
+  if (!fs.existsSync(notaPath)) {
+    logError(ruta, 404, "Nota no encontrada");
     return res.status(404).json({ error: "Nota no encontrada" });
+  }
+
   const contenido = fs.readFileSync(notaPath, "utf-8");
+  logOK(ruta, { contenido });
   res.send(contenido);
 });
 
-// ✅ POST /nota - Guardar una nota (nombre + contenido)
+// 🗒️ Notas: Guardar
 app.post("/nota", (req, res) => {
+  logReq("/nota");
   const { nombre, contenido } = req.body;
   if (!nombre || !contenido) {
+    logError("/nota", 400, "Falta nombre o contenido");
     return res.status(400).json({ error: "Falta nombre o contenido" });
   }
 
   const notaPath = path.join(USUARIOS_DIR, req.usuario, "notas", nombre);
   fs.writeFileSync(notaPath, contenido, "utf-8");
-  res.json({ mensaje: `Nota ${nombre} guardada.` });
+  const respuesta = { mensaje: `Nota ${nombre} guardada.` };
+  logOK("/nota", respuesta);
+  res.json(respuesta);
 });
 
-// ✅ DELETE /nota/:nombre - Eliminar una nota por nombre
+// 🗒️ Notas: Eliminar
 app.delete("/nota/:nombre", (req, res) => {
+  const ruta = `/nota/${req.params.nombre}`;
+  logReq(ruta);
   const notaPath = path.join(
     USUARIOS_DIR,
     req.usuario,
     "notas",
     req.params.nombre
   );
-  if (!fs.existsSync(notaPath))
+  if (!fs.existsSync(notaPath)) {
+    logError(ruta, 404, "Nota no encontrada");
     return res.status(404).json({ error: "Nota no encontrada" });
+  }
 
   fs.unlinkSync(notaPath);
-  res.json({ mensaje: `Nota ${req.params.nombre} eliminada.` });
+  const respuesta = { mensaje: `Nota ${req.params.nombre} eliminada.` };
+  logOK(ruta, respuesta);
+  res.json(respuesta);
 });
 
-// 🟢 Iniciar el servidor
+// 📜 YAML de la API
 app.use(
   "/openapi.yaml",
   express.static(path.join(__dirname, "..", "gpt", "openapi.yaml"))
 );
+
+// 🚀 Arranque
 app.listen(PORT, () => {
+  log("🧪 Backend activo en puerto 3611 (esperando solicitudes)");
   console.log(`GPT sin Alzheimer escuchando en http://localhost:${PORT}`);
 });
+
+// 🧪 Ping cada 1 minuto
+setInterval(() => {
+  log("📡 Ping: backend operativo");
+}, 60 * 1000);
