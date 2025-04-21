@@ -1,99 +1,116 @@
-
 openapi: 3.1.0
 info:
-  title: GPT sin Alzheimer API
+  title: GPT sin Alzheimer - API
   version: 1.0.0
-  description: API local para que GPT gestione notas, usuarios y preferencias de forma privada.
-
-servers:
-  - url: https://gptsinalzheimer.loca.lt
-    description: Servidor local del usuario
+  description: API local para gestionar usuarios y notas en GPT sin Alzheimer.
 
 paths:
   /usuarios:
     get:
-      summary: Lista los usuarios disponibles
-      operationId: listarUsuarios
+      summary: Obtener la lista de usuarios
+      tags: [Usuarios]
+      operationId: obtenerUsuarios
       responses:
-        '200':
-          description: Lista de nombres de usuario
+        "200":
+          description: Lista de usuarios
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  type: string
+                  $ref: "#/components/schemas/Usuario"
+        "500":
+          description: Error interno
 
   /usuario:
     post:
-      summary: Crea un nuevo usuario
+      summary: Crear nuevo usuario
+      tags: [Usuarios]
       operationId: crearUsuario
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                nombre:
-                  type: string
+              $ref: "#/components/schemas/Usuario"
+            examples:
+              ejemplo:
+                value:
+                  nombre: ana
       responses:
-        '200':
-          description: Usuario creado
+        "200":
+          description: Usuario creado correctamente
+        "400":
+          description: Nombre requerido o ya existente
+        "500":
+          description: Error interno
 
   /usuario/activar:
     post:
-      summary: Activa un usuario existente
+      summary: Activar usuario existente
+      tags: [Usuarios]
       operationId: activarUsuario
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                nombre:
-                  type: string
+              $ref: "#/components/schemas/Usuario"
       responses:
-        '200':
+        "200":
           description: Usuario activado
+        "400":
+          description: Usuario no encontrado
+        "500":
+          description: Error interno
 
   /notas:
     get:
-      summary: Lista las notas del usuario actual
-      operationId: listarNotas
+      summary: Obtener lista de notas del usuario activo
+      tags: [Notas]
+      operationId: obtenerNotas
       responses:
-        '200':
-          description: Lista de nombres de archivo
+        "200":
+          description: Lista de nombres de notas
           content:
             application/json:
               schema:
                 type: array
                 items:
                   type: string
+        "400":
+          description: Usuario no activo
+        "500":
+          description: Error interno
 
   /nota:
     post:
-      summary: Crea o actualiza una nota
+      summary: Crear o actualizar una nota
+      tags: [Notas]
       operationId: guardarNota
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                nombre:
-                  type: string
-                contenido:
-                  type: string
+              $ref: "#/components/schemas/Nota"
+            examples:
+              ejemplo:
+                value:
+                  nombre: introduccion.md
+                  contenido: "# Introducción\nEste es el contenido inicial..."
       responses:
-        '200':
-          description: Nota guardada
+        "200":
+          description: Nota guardada exitosamente
+        "400":
+          description: Datos inválidos o usuario no activo
+        "500":
+          description: Error interno
 
   /nota/{nombre}:
     get:
-      summary: Devuelve el contenido de una nota
+      summary: Obtener el contenido de una nota
+      tags: [Notas]
       operationId: obtenerNota
       parameters:
         - name: nombre
@@ -102,16 +119,23 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Contenido de la nota
           content:
             text/plain:
               schema:
                 type: string
+        "404":
+          description: Nota no encontrada
+        "400":
+          description: Usuario no activo
+        "500":
+          description: Error interno
 
     delete:
-      summary: Borra una nota por nombre
-      operationId: borrarNota
+      summary: Eliminar una nota
+      tags: [Notas]
+      operationId: eliminarNota
       parameters:
         - name: nombre
           in: path
@@ -119,5 +143,32 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: Nota eliminada
+        "200":
+          description: Nota eliminada correctamente
+        "404":
+          description: Nota no encontrada
+        "400":
+          description: Usuario no activo
+        "500":
+          description: Error interno
+
+components:
+  schemas:
+    Usuario:
+      type: object
+      properties:
+        nombre:
+          type: string
+      required:
+        - nombre
+
+    Nota:
+      type: object
+      properties:
+        nombre:
+          type: string
+        contenido:
+          type: string
+      required:
+        - nombre
+        - contenido

@@ -71,3 +71,5 @@ Repositorio del proyecto: [GitHub](https://github.com/AlejandroMorenoRivera/GPT-
 ---
 
 > Al usar esta herramienta, reconoces que entiendes y aceptas estos riesgos y limitaciones.
+
+**Versión del documento:** 1.0 — Actualizado el 19 de abril de 2025
